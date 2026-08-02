@@ -1,1 +1,8 @@
 foundry-local-sdk==1.2.4
+
+pymupdf
+python-docx
+
+numpy
+
+tqdm

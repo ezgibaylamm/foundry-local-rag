@@ -1,14 +1,12 @@
-from foundry_local_sdk import Configuration, FoundryLocalManager
+from src.database import DATABASE_PATH, count_chunks, initialize_database
 
 
-def main():
-    config = Configuration(app_name="foundry-local-rag")
-    FoundryLocalManager.initialize(config)
+def main() -> None:
+    initialize_database()
 
-    manager = FoundryLocalManager.instance
-
-    print("Foundry Local başarıyla başlatıldı.")
-    print(manager)
+    print("Foundry Local RAG")
+    print(f"Database: {DATABASE_PATH}")
+    print(f"Stored chunks: {count_chunks()}")
 
 
 if __name__ == "__main__":
