@@ -99,7 +99,7 @@ def main() -> None:
 
     manager = FoundryLocalManager.instance
 
-    query = "What is Retrieval-Augmented Generation?"
+    query = "What is the capital of Japan?"
 
     results = get_top_chunks(
         query,
