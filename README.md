@@ -1,25 +1,67 @@
 # Foundry Local RAG
 
-A fully local Retrieval-Augmented Generation (RAG) application built with Python, Microsoft Foundry Local, SQLite, and local language models.
+A fully local Retrieval-Augmented Generation (RAG) application built with Python, SQLite, and Microsoft Foundry Local.
 
-The project demonstrates how documents can be processed, embedded, stored, retrieved, and used as context for a local LLM without relying on a cloud-based inference service.
+The project retrieves relevant information from locally indexed documents using semantic search and provides the retrieved context to a locally running language model to generate grounded answers.
+
+The complete pipeline runs locally without requiring a cloud-based language model API.
+
+---
 
 ## Features
 
-- Fully local model inference with Foundry Local
-- PDF document ingestion
+- Local PDF document ingestion
 - Text extraction and chunking
+- SQLite-based document storage
 - Local embedding generation
-- SQLite-based document and embedding storage
-- Semantic search using cosine similarity
-- Top-K document retrieval
-- Similarity threshold for out-of-scope questions
-- Local LLM response generation
+- Semantic similarity search
+- Retrieval-Augmented Generation (RAG)
+- Local language model inference
+- Similarity threshold filtering
 - Source and chunk references
-- Interactive command-line RAG assistant
-- Retrieval evaluation
-- CSV evaluation results
-- Persistent model loading for improved performance
+- Interactive command-line interface
+- Streamlit web interface
+- Retrieval evaluation and benchmarking
+- CSV evaluation result export
+- Embedding model reuse for improved performance
+
+---
+
+## Architecture
+
+The application follows a standard RAG pipeline:
+
+```text
+PDF Documents
+      |
+      v
+Text Extraction
+      |
+      v
+Text Chunking
+      |
+      v
+Embedding Generation
+      |
+      v
+SQLite Database
+      |
+      v
+Semantic Retrieval
+      |
+      v
+Relevant Chunks
+      |
+      v
+Local Language Model
+      |
+      v
+Grounded Answer
+```
+
+Microsoft Foundry Local is used to run both the embedding model and chat model locally.
+
+---
 
 ## Project Structure
 
@@ -31,7 +73,7 @@ FoundryLocalRAG/
 │   └── evaluation_results.csv
 │
 ├── documents/
-│   └── Summer School Foundry Local Plan.pdf
+│   └── *.pdf
 │
 ├── models/
 │
@@ -46,45 +88,31 @@ FoundryLocalRAG/
 │   ├── retrieval.py
 │   └── utils.py
 │
-├── .gitignore
+├── app.py
 ├── main.py
-├── README.md
-└── requirements.txt
+├── requirements.txt
+├── .gitignore
+└── README.md
 ```
 
-## RAG Pipeline
+---
 
-The application follows the standard Retrieval-Augmented Generation workflow:
+## Technologies
 
-```text
-PDF Documents
-      ↓
-Text Extraction
-      ↓
-Chunking
-      ↓
-Embedding Generation
-      ↓
-SQLite Storage
-      ↓
-User Question
-      ↓
-Query Embedding
-      ↓
-Cosine Similarity Search
-      ↓
-Top-K Relevant Chunks
-      ↓
-Similarity Threshold
-      ↓
-Local LLM
-      ↓
-Grounded Answer + Sources
-```
+- Python
+- Microsoft Foundry Local
+- SQLite
+- Streamlit
+- NumPy
+- PDF text extraction
+- Local embedding models
+- Local language models
+
+---
 
 ## Models
 
-The project currently uses:
+The current configuration uses:
 
 ### Embedding Model
 
@@ -92,9 +120,7 @@ The project currently uses:
 qwen3-embedding-0.6b
 ```
 
-The embedding model converts document chunks and user queries into vector representations.
-
-The generated embeddings contain 1024 dimensions.
+The embedding model converts document chunks and user queries into vector representations used for semantic retrieval.
 
 ### Chat Model
 
@@ -102,171 +128,11 @@ The generated embeddings contain 1024 dimensions.
 qwen2.5-0.5b
 ```
 
-The chat model receives the retrieved document context and generates the final answer locally.
+The chat model generates answers using the document chunks retrieved by the semantic search pipeline.
 
-## Document Ingestion
+Both models run locally through Microsoft Foundry Local.
 
-Documents placed inside the `documents/` directory can be processed by the ingestion pipeline.
-
-Run:
-
-```bash
-python -m src.ingest
-```
-
-The ingestion process:
-
-1. Reads the PDF document
-2. Extracts text
-3. Splits the text into chunks
-4. Generates an embedding for each chunk
-5. Stores the chunk and embedding in SQLite
-
-Example:
-
-```text
-Reading: Summer School Foundry Local Plan.pdf
-Chunks: 71
-Embedding chunk 71/71
-Stored chunks: 71
-```
-
-## Semantic Retrieval
-
-The retrieval system converts a user query into an embedding and compares it with stored document embeddings using cosine similarity.
-
-The most relevant chunks are returned using Top-K retrieval.
-
-Run:
-
-```bash
-python -m src.retrieval
-```
-
-Example query:
-
-```text
-What is Retrieval-Augmented Generation?
-```
-
-Example retrieval:
-
-```text
-Result 1
-Chunk: 8
-Similarity: 0.6798
-
-Result 2
-Chunk: 18
-Similarity: 0.6353
-
-Result 3
-Chunk: 27
-Similarity: 0.6283
-```
-
-## Interactive RAG Assistant
-
-Start the local assistant with:
-
-```bash
-python -m src.chat
-```
-
-Example:
-
-```text
-==============================
-     Local RAG Assistant
-==============================
-
-Ask questions about your documents.
-Type 'exit' to quit.
-
-You: What are embeddings used for?
-
-Assistant: ...
-
-Sources:
-1. Summer School Foundry Local Plan.pdf (Chunk 26, Similarity 0.6385)
-2. Summer School Foundry Local Plan.pdf (Chunk 27, Similarity 0.6354)
-3. Summer School Foundry Local Plan.pdf (Chunk 29, Similarity 0.6216)
-
-You:
-```
-
-The assistant generates answers using retrieved document context and displays the source chunks used during retrieval.
-
-## Out-of-Scope Questions
-
-A similarity threshold is used to prevent the model from answering questions that are not supported by the document collection.
-
-Current threshold:
-
-```text
-0.40
-```
-
-For example:
-
-```text
-You: What is the capital of Japan?
-
-Assistant: I don't know based on the provided documents.
-```
-
-This reduces unsupported answers and helps keep responses grounded in the local knowledge base.
-
-## Evaluation
-
-The retrieval system includes a small evaluation suite containing both answerable and out-of-scope questions.
-
-Run:
-
-```bash
-python -m src.evaluate
-```
-
-Current evaluation result:
-
-```text
-Passed: 7/7
-Accuracy: 100.0%
-```
-
-The evaluation checks whether the similarity threshold correctly separates questions supported by the document from unrelated questions.
-
-Results are also stored in:
-
-```text
-data/evaluation_results.csv
-```
-
-## Performance Optimization
-
-Initially, the embedding model was loaded and unloaded for every retrieval query.
-
-This resulted in approximately:
-
-```text
-Total retrieval time: 12.417 seconds
-Average retrieval time: 1.774 seconds
-```
-
-The pipeline was optimized by loading the embedding model once and reusing the same embedding client across multiple queries.
-
-After optimization:
-
-```text
-Total retrieval time: 0.486 seconds
-Average retrieval time: 0.069 seconds
-```
-
-This reduced the measured average retrieval time by approximately 96%.
-
-The interactive assistant also keeps both the embedding model and chat model loaded for the entire chat session.
-
-The models are unloaded only when the user exits the application.
+---
 
 ## Installation
 
@@ -280,83 +146,301 @@ cd foundry-local-rag
 Create a virtual environment:
 
 ```bash
-python -m venv .venv
+python3 -m venv .venv
 ```
 
-Activate it on macOS/Linux:
+Activate the environment.
+
+### macOS / Linux
 
 ```bash
 source .venv/bin/activate
 ```
 
-Install dependencies:
+### Windows
+
+```bash
+.venv\Scripts\activate
+```
+
+Install the dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
+---
+
 ## Running the Project
 
-### 1. Ingest documents
+### 1. Add documents
+
+Place PDF documents inside:
+
+```text
+documents/
+```
+
+---
+
+### 2. Ingest documents
+
+Run:
 
 ```bash
 python -m src.ingest
 ```
 
-### 2. Test retrieval
+This process:
+
+1. Reads PDF documents
+2. Extracts text
+3. Splits the text into chunks
+4. Generates embeddings locally
+5. Stores chunks and embeddings in SQLite
+
+The resulting local database is stored at:
+
+```text
+data/rag.db
+```
+
+---
+
+### 3. Test semantic retrieval
+
+Run:
 
 ```bash
 python -m src.retrieval
 ```
 
-### 3. Run evaluation
+This performs semantic search against the indexed document chunks and displays the most relevant results together with their similarity scores.
 
-```bash
-python -m src.evaluate
-```
+---
 
-### 4. Start the RAG assistant
+### 4. Run the command-line RAG assistant
+
+Run:
 
 ```bash
 python -m src.chat
 ```
 
-## Technology Stack
+The assistant allows interactive questions about the indexed documents.
 
-- Python
-- Microsoft Foundry Local
-- Qwen embedding model
-- Qwen local chat model
-- SQLite
-- Cosine similarity
-- Retrieval-Augmented Generation (RAG)
+Example:
+
+```text
+You: What is Retrieval-Augmented Generation?
+
+Assistant: Retrieval-Augmented Generation (RAG) is an AI design pattern...
+```
+
+The assistant also displays the source document, chunk number, and similarity score used to generate the answer.
+
+Questions that are not sufficiently supported by the indexed documents are rejected using the configured similarity threshold.
+
+Type:
+
+```text
+exit
+```
+
+to close the assistant.
+
+---
+
+### 5. Run the Streamlit interface
+
+Start the web application with:
+
+```bash
+streamlit run app.py
+```
+
+Streamlit will open the application in the browser, typically at:
+
+```text
+http://localhost:8501
+```
+
+The web interface provides:
+
+- Interactive document-based Q&A
+- Semantic document retrieval
+- Local language model inference
+- Similarity threshold filtering
+- Source chunk references
+- Conversation history
+- Clear conversation control
+- Local model status information
+
+---
+
+## Retrieval
+
+User questions are converted into embeddings using the same embedding model used during document ingestion.
+
+Cosine similarity is then calculated between the query embedding and stored document embeddings.
+
+The highest-scoring chunks are selected as context for the language model.
+
+A similarity threshold is used to prevent unrelated questions from being answered using irrelevant document content.
+
+Current threshold:
+
+```text
+0.40
+```
+
+For example, a question related to the indexed RAG document can be answered, while an unrelated question such as:
+
+```text
+What is the capital of Japan?
+```
+
+is rejected when the retrieved chunks do not meet the required similarity threshold.
+
+---
+
+## Evaluation
+
+The project includes a retrieval evaluation script.
+
+Run:
+
+```bash
+python -m src.evaluate
+```
+
+The evaluation contains both:
+
+- Answerable document-related questions
+- Unanswerable out-of-domain questions
+
+For each test, the system records:
+
+- Question
+- Best similarity score
+- Expected answerability
+- Predicted answerability
+- Retrieval time
+- Pass/fail result
+
+The evaluation summary reports:
+
+```text
+Passed tests
+Accuracy
+Total retrieval time
+Average retrieval time
+```
+
+Evaluation results are also exported to:
+
+```text
+data/evaluation_results.csv
+```
+
+---
+
+## Performance Optimization
+
+The embedding model is reused during evaluation rather than being repeatedly initialized for every query.
+
+This significantly reduces retrieval latency and makes repeated semantic searches more efficient.
+
+The evaluation pipeline can therefore be used for both correctness testing and basic retrieval performance benchmarking.
+
+---
+
+## Local-First Design
+
+The project is designed around local execution.
+
+Document processing, embeddings, retrieval, and answer generation are performed locally.
+
+This provides several advantages:
+
+- No cloud LLM API is required
+- Documents remain on the local machine
+- Reduced dependency on external services
+- Local experimentation with embedding and language models
+- Greater control over the complete RAG pipeline
+
+---
 
 ## Current Status
 
-The core local RAG pipeline is functional.
+The following components are implemented:
 
-Implemented components include:
-
-- Document ingestion
-- Chunk generation
-- Embedding generation
-- Local vector storage
+- PDF ingestion
+- Text chunking
+- SQLite document storage
+- Local embedding generation
 - Semantic retrieval
-- Similarity filtering
-- Local LLM generation
-- Source attribution
-- Interactive CLI
+- Cosine similarity ranking
+- Similarity threshold filtering
+- Local chat model integration
+- Retrieval-Augmented Generation
+- Interactive CLI assistant
+- Source references
 - Retrieval evaluation
-- Performance optimization
-
-## Next Steps
-
-Planned improvements include:
-
+- Performance measurement
+- CSV evaluation export
+- Embedding model reuse
 - Streamlit web interface
-- Support for multiple uploaded documents
+
+The core Local RAG pipeline is functional end-to-end.
+
+---
+
+## Possible Future Improvements
+
+Possible extensions include:
+
+- PDF upload directly from the web interface
+- Multiple document collections
+- Configurable Top-K retrieval
+- Configurable similarity threshold
+- Additional retrieval evaluation metrics
+- Persistent conversation history
+- More extensive performance benchmarking
+- Support for additional local embedding and chat models
 - Improved document management
-- Retrieval configuration controls
-- Better evaluation metrics
-- Chat history
-- Additional performance benchmarking
+
+---
+
+## Example Workflow
+
+```bash
+# Activate environment
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Ingest documents
+python -m src.ingest
+
+# Test retrieval
+python -m src.retrieval
+
+# Run evaluation
+python -m src.evaluate
+
+# Run CLI assistant
+python -m src.chat
+
+# Run web interface
+streamlit run app.py
+```
+
+---
+
+## Summary
+
+This project demonstrates an end-to-end local Retrieval-Augmented Generation pipeline using Microsoft Foundry Local.
+
+It combines local document ingestion, embeddings, SQLite storage, semantic retrieval, similarity filtering, local language model inference, evaluation, and a Streamlit user interface into a single document-grounded question-answering application.
