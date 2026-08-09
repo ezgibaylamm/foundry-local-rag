@@ -1,6 +1,7 @@
 from foundry_local_sdk import Configuration, FoundryLocalManager
 
-from src.retrieval import get_top_chunks
+from src.embeddings import get_embedding_model
+from src.retrieval import get_top_chunks_with_client
 
 
 CHAT_MODEL_ALIAS = "qwen2.5-0.5b"
@@ -32,17 +33,17 @@ def get_chat_model(manager: FoundryLocalManager):
 
 def answer_query(
     question: str,
-    manager: FoundryLocalManager,
+    embedding_client,
+    chat_client,
 ) -> tuple[str, list[dict]]:
     """
     Kullanıcı sorusu için en alakalı chunk'ları bulur.
     Yeterince alakalı context varsa local chat modeli ile cevap üretir.
-    Cevapla birlikte kullanılan kaynakları da döndürür.
     """
 
-    results = get_top_chunks(
+    results = get_top_chunks_with_client(
         question,
-        manager,
+        embedding_client,
         top_k=3,
     )
 
@@ -67,9 +68,6 @@ def answer_query(
         for result in results
     )
 
-    model = get_chat_model(manager)
-    client = model.get_chat_client()
-
     messages = [
         {
             "role": "system",
@@ -92,42 +90,38 @@ def answer_query(
 
     answer_parts = []
 
-    try:
-        print("\nAssistant: ", end="", flush=True)
+    print("\nAssistant: ", end="", flush=True)
 
-        for chunk in client.complete_streaming_chat(messages):
-            if not chunk.choices:
-                continue
+    for chunk in chat_client.complete_streaming_chat(messages):
+        if not chunk.choices:
+            continue
 
-            delta = chunk.choices[0].delta
+        delta = chunk.choices[0].delta
 
-            if not delta:
-                continue
+        if not delta:
+            continue
 
-            content = delta.content
+        content = delta.content
 
-            if content:
-                answer_parts.append(content)
+        if content:
+            answer_parts.append(content)
 
-                print(
-                    content,
-                    end="",
-                    flush=True,
-                )
+            print(
+                content,
+                end="",
+                flush=True,
+            )
 
-        print()
+    print()
 
-        answer = "".join(answer_parts)
+    answer = "".join(answer_parts)
 
-        return answer, results
-
-    finally:
-        model.unload()
+    return answer, results
 
 
 def print_sources(results: list[dict]) -> None:
     """
-    Cevap oluşturulurken kullanılan kaynakları terminalde gösterir.
+    Cevap oluşturulurken kullanılan kaynakları gösterir.
     """
 
     if not results:
@@ -135,7 +129,10 @@ def print_sources(results: list[dict]) -> None:
 
     print("\nSources:")
 
-    for index, result in enumerate(results, start=1):
+    for index, result in enumerate(
+        results,
+        start=1,
+    ):
         print(
             f"{index}. {result['source_name']} "
             f"(Chunk {result['chunk_index']}, "
@@ -148,6 +145,7 @@ def print_sources(results: list[dict]) -> None:
 def main() -> None:
     """
     Terminal üzerinden çalışan Local RAG chatbot.
+    Modeller sohbet başında bir kez yüklenir.
     """
 
     config = Configuration(
@@ -158,37 +156,53 @@ def main() -> None:
 
     manager = FoundryLocalManager.instance
 
+    print("\nPreparing Local RAG Assistant...\n")
+
+    embedding_model = get_embedding_model(manager)
+    embedding_client = embedding_model.get_embedding_client()
+
+    chat_model = get_chat_model(manager)
+    chat_client = chat_model.get_chat_client()
+
     print("\n==============================")
     print("     Local RAG Assistant")
     print("==============================")
     print("Ask questions about your documents.")
     print("Type 'exit' to quit.\n")
 
-    while True:
-        question = input("You: ").strip()
+    try:
+        while True:
+            question = input("You: ").strip()
 
-        if question.lower() in {"exit", "quit"}:
-            print("\nGoodbye!")
-            break
+            if question.lower() in {"exit", "quit"}:
+                print("\nGoodbye!")
+                break
 
-        if not question:
-            print("Please enter a question.\n")
-            continue
-
-        try:
-            answer, sources = answer_query(
-                question,
-                manager,
-            )
-
-            if not sources:
-                print(f"\nAssistant: {answer}\n")
+            if not question:
+                print("Please enter a question.\n")
                 continue
 
-            print_sources(sources)
+            try:
+                answer, sources = answer_query(
+                    question,
+                    embedding_client,
+                    chat_client,
+                )
 
-        except Exception as error:
-            print(f"\nError: {error}\n")
+                if not sources:
+                    print(f"\nAssistant: {answer}\n")
+                    continue
+
+                print_sources(sources)
+
+            except Exception as error:
+                print(f"\nError: {error}\n")
+
+    finally:
+        chat_model.unload()
+        embedding_model.unload()
+
+        print("\nModels unloaded.")
 
 
 if __name__ == "__main__":
