@@ -1,8 +1,8 @@
 question,best_similarity,expected_answerable,predicted_answerable,retrieval_time_seconds,result
-What is Retrieval-Augmented Generation?,0.6798,True,True,0.109,PASS
-What is Foundry Local?,0.6056,True,True,0.063,PASS
+What is Retrieval-Augmented Generation?,0.6798,True,True,0.143,PASS
+What is Foundry Local?,0.6056,True,True,0.062,PASS
 Why is SQLite used in this project?,0.6826,True,True,0.066,PASS
-What are embeddings used for?,0.6385,True,True,0.062,PASS
+What are embeddings used for?,0.6385,True,True,0.063,PASS
 What is the capital of Japan?,0.2637,False,False,0.063,PASS
-Who won the FIFA World Cup in 2022?,0.1897,False,False,0.062,PASS
-What is the population of Italy?,0.2842,False,False,0.062,PASS
+Who won the FIFA World Cup in 2022?,0.1897,False,False,0.060,PASS
+What is the population of Italy?,0.2842,False,False,0.070,PASS
