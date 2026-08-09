@@ -1,9 +1,30 @@
 from pathlib import Path
+import json
 import fitz
 
-from src.config import DOCUMENTS_DIR
+from foundry_local_sdk import (
+    Configuration,
+    FoundryLocalManager,
+)
+
+from src.config import (
+    DOCUMENTS_DIR,
+    CHUNK_SIZE,
+    CHUNK_OVERLAP,
+)
+
 from src.utils import chunk_text
-from src.config import CHUNK_SIZE, CHUNK_OVERLAP
+
+from src.database import (
+    initialize_database,
+    get_connection,
+    count_chunks,
+)
+
+from src.embeddings import (
+    get_embedding_model,
+    generate_embedding,
+)
 
 
 def read_pdf(path: Path) -> str:
@@ -19,29 +40,104 @@ def read_pdf(path: Path) -> str:
     return text
 
 
-if __name__ == "__main__":
+def save_chunk(
+    source_name: str,
+    chunk_index: int,
+    content: str,
+    embedding: list[float],
+) -> None:
 
-    pdfs = list(DOCUMENTS_DIR.glob("*.pdf"))
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO document_chunks
+            (
+                source_name,
+                chunk_index,
+                content,
+                embedding
+            )
+            VALUES (?, ?, ?, ?)
+            """,
+            (
+                source_name,
+                chunk_index,
+                content,
+                json.dumps(embedding),
+            ),
+        )
+
+        connection.commit()
+
+
+def main() -> None:
+    initialize_database()
+
+    config = Configuration(
+        app_name="foundry_local_rag"
+    )
+
+    FoundryLocalManager.initialize(config)
+
+    manager = FoundryLocalManager.instance
+
+    pdfs = list(
+        DOCUMENTS_DIR.glob("*.pdf")
+    )
 
     if not pdfs:
         print("No PDF files found.")
-        exit()
+        return
 
-    pdf = pdfs[0]
+    model = get_embedding_model(manager)
+    client = model.get_embedding_client()
 
-    print(f"Reading: {pdf.name}")
+    try:
 
-    text = read_pdf(pdf)
+        for pdf in pdfs:
+            print(f"\nReading: {pdf.name}")
 
-    print(f"\nCharacters: {len(text)}")
+            text = read_pdf(pdf)
 
-    chunks = chunk_text(
-        text,
-        CHUNK_SIZE,
-        CHUNK_OVERLAP,
+            chunks = chunk_text(
+                text,
+                CHUNK_SIZE,
+                CHUNK_OVERLAP,
+            )
+
+            print(f"Chunks: {len(chunks)}")
+
+            for index, chunk in enumerate(chunks):
+
+                print(
+                    f"\rEmbedding chunk "
+                    f"{index + 1}/{len(chunks)}",
+                    end="",
+                    flush=True,
+                )
+
+                embedding = generate_embedding(
+                    client,
+                    chunk,
+                )
+
+                save_chunk(
+                    source_name=pdf.name,
+                    chunk_index=index,
+                    content=chunk,
+                    embedding=embedding,
+                )
+
+            print()
+
+    finally:
+        model.unload()
+        print("Embedding model unloaded.")
+
+    print(
+        f"Stored chunks: {count_chunks()}"
     )
 
-    print(f"Chunks: {len(chunks)}")
 
-    print("\nFirst Chunk:\n")
-    print(chunks[0][:1000])
+if __name__ == "__main__":
+    main()
