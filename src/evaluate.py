@@ -1,9 +1,18 @@
+import csv
+import time
+from pathlib import Path
+
 from foundry_local_sdk import Configuration, FoundryLocalManager
 
-from src.retrieval import get_top_chunks
+from src.embeddings import get_embedding_model
+from src.retrieval import get_top_chunks_with_client
 
 
 SIMILARITY_THRESHOLD = 0.40
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR / "data"
+RESULTS_PATH = DATA_DIR / "evaluation_results.csv"
 
 
 TEST_CASES = [
@@ -38,6 +47,36 @@ TEST_CASES = [
 ]
 
 
+def save_results(rows: list[dict]) -> None:
+    DATA_DIR.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    fieldnames = [
+        "question",
+        "best_similarity",
+        "expected_answerable",
+        "predicted_answerable",
+        "retrieval_time_seconds",
+        "result",
+    ]
+
+    with open(
+        RESULTS_PATH,
+        "w",
+        newline="",
+        encoding="utf-8",
+    ) as file:
+        writer = csv.DictWriter(
+            file,
+            fieldnames=fieldnames,
+        )
+
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main() -> None:
     config = Configuration(
         app_name="foundry_local_rag"
@@ -47,48 +86,129 @@ def main() -> None:
 
     manager = FoundryLocalManager.instance
 
+    model = get_embedding_model(manager)
+    embedding_client = model.get_embedding_client()
+
     passed = 0
+    total_time = 0.0
+    evaluation_rows = []
 
     print("\n==============================")
     print("      RAG Evaluation")
     print("==============================\n")
 
-    for index, test_case in enumerate(TEST_CASES, start=1):
-        question = test_case["question"]
-        expected = test_case["should_be_answerable"]
+    try:
+        for index, test_case in enumerate(
+            TEST_CASES,
+            start=1,
+        ):
+            question = test_case["question"]
+            expected = test_case["should_be_answerable"]
 
-        results = get_top_chunks(
-            question,
-            manager,
-            top_k=3,
-        )
+            start_time = time.perf_counter()
 
-        best_score = (
-            results[0]["score"]
-            if results
-            else 0.0
-        )
+            results = get_top_chunks_with_client(
+                question,
+                embedding_client,
+                top_k=3,
+            )
 
-        predicted = best_score >= SIMILARITY_THRESHOLD
+            elapsed_time = (
+                time.perf_counter()
+                - start_time
+            )
 
-        success = predicted == expected
+            total_time += elapsed_time
 
-        if success:
-            passed += 1
+            best_score = (
+                results[0]["score"]
+                if results
+                else 0.0
+            )
 
-        print(f"Test {index}")
-        print(f"Question: {question}")
-        print(f"Best similarity: {best_score:.4f}")
-        print(f"Expected answerable: {expected}")
-        print(f"Predicted answerable: {predicted}")
-        print(f"Result: {'PASS' if success else 'FAIL'}")
-        print("-" * 60)
+            predicted = (
+                best_score
+                >= SIMILARITY_THRESHOLD
+            )
+
+            success = predicted == expected
+
+            if success:
+                passed += 1
+
+            result_label = (
+                "PASS"
+                if success
+                else "FAIL"
+            )
+
+            evaluation_rows.append(
+                {
+                    "question": question,
+                    "best_similarity": f"{best_score:.4f}",
+                    "expected_answerable": expected,
+                    "predicted_answerable": predicted,
+                    "retrieval_time_seconds": f"{elapsed_time:.3f}",
+                    "result": result_label,
+                }
+            )
+
+            print(f"Test {index}")
+            print(f"Question: {question}")
+            print(
+                f"Best similarity: "
+                f"{best_score:.4f}"
+            )
+            print(
+                f"Expected answerable: "
+                f"{expected}"
+            )
+            print(
+                f"Predicted answerable: "
+                f"{predicted}"
+            )
+            print(
+                f"Retrieval time: "
+                f"{elapsed_time:.3f} seconds"
+            )
+            print(f"Result: {result_label}")
+            print("-" * 60)
+
+    finally:
+        model.unload()
+        print("\nEmbedding model unloaded.")
 
     total = len(TEST_CASES)
 
-    print("\nEvaluation Summary")
+    accuracy = (
+        passed / total
+    ) * 100
+
+    average_time = (
+        total_time / total
+    )
+
+    save_results(
+        evaluation_rows
+    )
+
+    print("\n==============================")
+    print("      Evaluation Summary")
+    print("==============================")
     print(f"Passed: {passed}/{total}")
-    print(f"Accuracy: {(passed / total) * 100:.1f}%")
+    print(f"Accuracy: {accuracy:.1f}%")
+    print(
+        f"Total retrieval time: "
+        f"{total_time:.3f} seconds"
+    )
+    print(
+        f"Average retrieval time: "
+        f"{average_time:.3f} seconds"
+    )
+    print(
+        f"Results saved to: "
+        f"{RESULTS_PATH}"
+    )
 
 
 if __name__ == "__main__":

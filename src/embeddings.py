@@ -37,7 +37,13 @@ def generate_embedding(client, text: str) -> list[float]:
 
 
 def main() -> None:
-    config = Configuration(app_name="foundry_local_rag")
+    """
+    Embedding modelini tek başına test etmek için kullanılır.
+    """
+    config = Configuration(
+        app_name="foundry_local_rag"
+    )
+
     FoundryLocalManager.initialize(config)
 
     manager = FoundryLocalManager.instance
@@ -46,9 +52,14 @@ def main() -> None:
     client = model.get_embedding_client()
 
     try:
+        text = (
+            "Retrieval-Augmented Generation uses "
+            "retrieved documents as context."
+        )
+
         embedding = generate_embedding(
             client,
-            "Retrieval-Augmented Generation uses retrieved documents as context.",
+            text,
         )
 
         print(f"Embedding dimensions: {len(embedding)}")

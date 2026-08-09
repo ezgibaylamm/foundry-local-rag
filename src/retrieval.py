@@ -11,7 +11,6 @@ def cosine_similarity(
     vector_a: list[float],
     vector_b: list[float],
 ) -> float:
-
     dot_product = sum(
         a * b
         for a, b in zip(vector_a, vector_b)
@@ -31,59 +30,81 @@ def cosine_similarity(
     return dot_product / (magnitude_a * magnitude_b)
 
 
+def get_top_chunks_with_client(
+    query: str,
+    embedding_client,
+    top_k: int = 3,
+):
+    """
+    Hazır embedding client kullanarak
+    en alakalı chunk'ları bulur.
+    """
+
+    query_embedding = generate_embedding(
+        embedding_client,
+        query,
+    )
+
+    with get_connection() as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                source_name,
+                chunk_index,
+                content,
+                embedding
+            FROM document_chunks
+            """
+        ).fetchall()
+
+    results = []
+
+    for row in rows:
+        chunk_embedding = json.loads(
+            row["embedding"]
+        )
+
+        score = cosine_similarity(
+            query_embedding,
+            chunk_embedding,
+        )
+
+        results.append(
+            {
+                "source_name": row["source_name"],
+                "chunk_index": row["chunk_index"],
+                "content": row["content"],
+                "score": score,
+            }
+        )
+
+    results.sort(
+        key=lambda item: item["score"],
+        reverse=True,
+    )
+
+    return results[:top_k]
+
+
 def get_top_chunks(
     query: str,
     manager: FoundryLocalManager,
     top_k: int = 3,
 ):
+    """
+    Standalone kullanım için embedding modelini
+    kendi yükler ve işlem sonunda kapatır.
+    """
+
     model = get_embedding_model(manager)
     client = model.get_embedding_client()
 
     try:
-        query_embedding = generate_embedding(
-            client,
+        return get_top_chunks_with_client(
             query,
+            client,
+            top_k=top_k,
         )
-
-        with get_connection() as connection:
-            rows = connection.execute(
-                """
-                SELECT
-                    source_name,
-                    chunk_index,
-                    content,
-                    embedding
-                FROM document_chunks
-                """
-            ).fetchall()
-
-        results = []
-
-        for row in rows:
-            chunk_embedding = json.loads(
-                row["embedding"]
-            )
-
-            score = cosine_similarity(
-                query_embedding,
-                chunk_embedding,
-            )
-
-            results.append(
-                {
-                    "source_name": row["source_name"],
-                    "chunk_index": row["chunk_index"],
-                    "content": row["content"],
-                    "score": score,
-                }
-            )
-
-        results.sort(
-            key=lambda item: item["score"],
-            reverse=True,
-        )
-
-        return results[:top_k]
 
     finally:
         model.unload()
@@ -99,7 +120,7 @@ def main() -> None:
 
     manager = FoundryLocalManager.instance
 
-    query = "What is the capital of Japan?"
+    query = "What is Retrieval-Augmented Generation?"
 
     results = get_top_chunks(
         query,
