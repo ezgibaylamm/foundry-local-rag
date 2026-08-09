@@ -34,7 +34,7 @@ def answer_query(
     manager: FoundryLocalManager,
 ) -> str:
     """
-    Kullanıcı sorusu için ilgili chunk'ları bulur
+    Kullanıcı sorusu için en alakalı chunk'ları bulur
     ve local chat modeli ile cevap üretir.
     """
 
@@ -75,10 +75,9 @@ def answer_query(
     answer_parts = []
 
     try:
-        print("\nGenerating answer...\n")
+        print("\nAssistant: ", end="", flush=True)
 
         for chunk in client.complete_streaming_chat(messages):
-
             if not chunk.choices:
                 continue
 
@@ -98,16 +97,19 @@ def answer_query(
                     flush=True,
                 )
 
-        print()
+        print("\n")
 
         return "".join(answer_parts)
 
     finally:
         model.unload()
-        print("\nChat model unloaded.")
 
 
 def main() -> None:
+    """
+    Terminal üzerinden çalışan Local RAG chatbot.
+    """
+
     config = Configuration(
         app_name="foundry_local_rag"
     )
@@ -116,17 +118,31 @@ def main() -> None:
 
     manager = FoundryLocalManager.instance
 
-    question = "What is Retrieval-Augmented Generation?"
+    print("\n==============================")
+    print("     Local RAG Assistant")
+    print("==============================")
+    print("Ask questions about your documents.")
+    print("Type 'exit' to quit.\n")
 
-    print(f"\nQuestion: {question}")
+    while True:
+        question = input("You: ").strip()
 
-    answer = answer_query(
-        question,
-        manager,
-    )
+        if question.lower() in {"exit", "quit"}:
+            print("\nGoodbye!")
+            break
 
-    print("\n\nFinal Answer:")
-    print(answer)
+        if not question:
+            print("Please enter a question.\n")
+            continue
+
+        try:
+            answer_query(
+                question,
+                manager,
+            )
+
+        except Exception as error:
+            print(f"\nError: {error}\n")
 
 
 if __name__ == "__main__":
